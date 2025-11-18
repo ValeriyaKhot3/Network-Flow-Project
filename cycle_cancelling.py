@@ -1,7 +1,7 @@
 import networkx as nx
 from copy import deepcopy
 
-def cycle_cancelling(G, s, t, weight="weight", capacity="capacity"):
+def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity"):
     """
     Cycle-Cancelling algorithm for Minimum-Cost Flow.
     
@@ -49,7 +49,7 @@ def cycle_cancelling(G, s, t, weight="weight", capacity="capacity"):
     for u, v, data in G.edges(data=True):
         G_cap.add_edge(u, v, capacity=data[capacity])
 
-    flow_dict = nx.maximum_flow(G_cap, s, t)[1]  # flow_dict is a nested dict
+    flow_dict = nx.maximum_flow(G_cap, s, t, flow_func=None)[1]  # flow_dict is a nested dict
 
     # --------------------------------------------------------
     # 3. BUILD INITIAL RESIDUAL GRAPH
