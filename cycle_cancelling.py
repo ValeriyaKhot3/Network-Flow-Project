@@ -85,6 +85,7 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
 
         if weight not in data:
             raise ValueError(f"Edge ({u},{v}) missing weight attribute.")
+        #the algorithm can run on negative too - think of delete it
         if data[weight] < 0:
             raise ValueError(f"Edge ({u},{v}) has negative weight ({data[weight]}).")
 
@@ -156,15 +157,11 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
         try:
             # pick any source node — residual graph may not be connected
             source_any = next(iter(R.nodes))
-            print("got the source*****************")
             cycle = nx.find_negative_cycle(R, source_any, weight="weight")
-            print("yay the cycle*****************")
             print_residual_graph_state(R, cycle)
-            print("the print??*****************")
 
         except nx.NetworkXError:
             # no negative cycle — we are done
-            print("WHYYYYYYYYYYY")
             break
 
         # cycle returned as [v0, v1, ..., vk, v0]
