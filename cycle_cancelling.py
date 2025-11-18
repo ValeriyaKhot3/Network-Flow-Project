@@ -2,6 +2,53 @@ import networkx as nx
 from copy import deepcopy
 import matplotlib.pyplot as plt
 
+def print_residual_graph_state(R, cycle=None):
+    """
+    Prints the state of the residual graph to the console for a given iteration.
+    """
+    print(f"\n========================================================")
+    print(f"========================================================")
+    
+    # 1. Print cycle information if found
+    if cycle:
+        cycle_edges = []
+        cycle_cost = 0
+        for i in range(len(cycle) - 1):
+            u = cycle[i]
+            v = cycle[i + 1]
+            # Use .get for safety, although the cycle should only contain existing edges
+            weight = R[u][v].get("weight", 0)
+            cycle_cost += weight
+            cycle_edges.append(f"({u} -> {v})")
+            
+        print(f"Negative Cycle Found (Cost: {cycle_cost:.2f}): {' -> '.join(map(str, cycle[:-1]))} -> {cycle[0]}")
+    else:
+        print("No Negative Cycle Found. Termination condition met.")
+
+    # 2. Print all residual edges
+    print("\nResidual Edges (u -> v: Cap, Cost):")
+    edges_to_print = []
+    for u, v, data in R.edges(data=True):
+        cap = data["capacity"]
+        weight = data["weight"]
+        # Highlight cycle edges in the printout
+        if cycle:
+            is_cycle_edge = False
+            for i in range(len(cycle) - 1):
+                if (u, v) == (cycle[i], cycle[i+1]):
+                    is_cycle_edge = True
+                    break
+            
+            label = f"   * {u} -> {v}: ({cap}, {weight})" if is_cycle_edge else f"     {u} -> {v}: ({cap}, {weight})"
+        else:
+            label = f"     {u} -> {v}: ({cap}, {weight})"
+            
+        edges_to_print.append(label)
+        
+    for label in sorted(edges_to_print):
+         print(label)
+    print(f"========================================================\n")
+
 def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity"):
     """
     Cycle-Cancelling algorithm for Minimum-Cost Flow.
@@ -73,6 +120,8 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
             # backward edge (v -> u)
             if residual_bwd > 0:
                 R.add_edge(v, u, capacity=residual_bwd, weight=-w)
+        
+
 
         return R
 
@@ -107,10 +156,15 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
         try:
             # pick any source node — residual graph may not be connected
             source_any = next(iter(R.nodes))
+            print("got the source*****************")
             cycle = nx.find_negative_cycle(R, source_any, weight="weight")
+            print("yay the cycle*****************")
+            print_residual_graph_state(R, cycle)
+            print("the print??*****************")
 
         except nx.NetworkXError:
             # no negative cycle — we are done
+            print("WHYYYYYYYYYYY")
             break
 
         # cycle returned as [v0, v1, ..., vk, v0]
@@ -279,7 +333,7 @@ def build_and_draw_graph2():
         print(f"  {u} -> {v}: Capacity={data['capacity']}, Weight={data['weight']}")
         
     return G
-
+# residual graph is not connected- the nx func canot work properly !!!
 def build_and_draw_graph3():
     """
     Initializes the new node directed graph, adds edges with capacity and weight attributes,
@@ -359,11 +413,80 @@ def build_and_draw_graph3():
         print(f"  {u} -> {v}: Capacity={data['capacity']}, Weight={data['weight']}")
         
     return G
+#same as 3
+def build_and_draw_graph4():
+    """
+    Initializes the graph based on the user's input, with one modification 
+    to introduce a negative cycle (2 -> 1 -> 2) with cost -4.
+    
+    Returns:
+        nx.DiGraph: The constructed graph G.
+    """
+    G = nx.DiGraph()
+
+    # Node positions based on user input (n <x> <y> <node_id>)
+    pos = {
+        0: (0, 200),
+        1: (150, 300),
+        2: (150, 200),
+        3: (150, 100),
+        4: (300, 250),
+        5: (300, 150),
+        6: (450, 200),
+    }
+
+    # Edges based on user input (e <source> <target> <edge_id> <capacity> <weight>)
+    edges_with_attributes = [
+        # Original edges from user request
+        (0, 1, {'capacity': 8, 'weight': 2}),
+        (0, 2, {'capacity': 6, 'weight': 1}),
+        # (1, 3, {'capacity': 3, 'weight': 5}), # Use this original edge
+        (2, 1, {'capacity': 2, 'weight': 1}),
+        (2, 4, {'capacity': 5, 'weight': 2}),
+        (3, 5, {'capacity': 4, 'weight': 1}),
+        (3, 4, {'capacity': 1, 'weight': 3}),
+        (4, 6, {'capacity': 7, 'weight': 1}),
+        (5, 4, {'capacity': 2, 'weight': 1}),
+        (5, 6, {'capacity': 5, 'weight': 3}),
+        (2, 5, {'capacity': 4, 'weight': 1}),
+        (4, 1, {'capacity': 1, 'weight': 1}),
+    ]
+    
+    G.add_edges_from(edges_with_attributes)
+
+    # 5. Extract edge labels for drawing
+    edge_labels = {
+        (u, v): f"({d['capacity']},{d['weight']})"
+        for u, v, d in G.edges(data=True)
+    }
+
+    # 6. Visualization settings
+    plt.figure(figsize=(8, 6))
+
+    nx.draw_networkx_nodes(G, pos, node_size=1000, node_color="#FFD700", edgecolors="black", linewidths=1.5)
+    nx.draw_networkx_edges(G, pos, arrowsize=20, edge_color="black", width=2)
+    nx.draw_networkx_labels(G, pos, font_size=12, font_weight="bold")
+    
+    nx.draw_networkx_edge_labels(
+        G, pos, 
+        edge_labels=edge_labels, 
+        font_color='black', 
+        label_pos=0.5, 
+        font_size=10
+    )
+
+    plt.title("Directed Graph 4 (Min-Cost Test with Negative Cycle: 2→1→2)")
+    plt.axis('off')
+    plt.show()
+        
+    return G
+
 
 def main():
     """
     Main entry point for the script.
     """
+    
     G1 = build_and_draw_graph1()
     # Define source (s) and sink (t) for the Min-Cost Max-Flow problem
     source_node = 0
@@ -400,6 +523,7 @@ def main():
         print(f"The Cycle-Cancelling algorithm failed, likely due to a dependency on a non-standard NetworkX function (nx.find_negative_cycle) or an issue in flow augmentation logic.")
         print(f"Error details: {e}")
 
+    """
     G2 = build_and_draw_graph2()
 
     # Define source (s) and sink (t) for the Min-Cost Max-Flow problem
@@ -437,6 +561,7 @@ def main():
         print(f"The Cycle-Cancelling algorithm failed, likely due to a dependency on a non-standard NetworkX function (nx.find_negative_cycle) or an issue in flow augmentation logic.")
         print(f"Error details: {e}")
 
+
     G3 = build_and_draw_graph3()
     # Define source (s) and sink (t) for the Min-Cost Max-Flow problem
     source_node = 0
@@ -472,6 +597,44 @@ def main():
         print(f"\n--- Execution Error ---")
         print(f"The Cycle-Cancelling algorithm failed, likely due to a dependency on a non-standard NetworkX function (nx.find_negative_cycle) or an issue in flow augmentation logic.")
         print(f"Error details: {e}")
+    """
+    G4 = build_and_draw_graph4()
+
+    # Define source (s) and sink (t) for the Min-Cost Max-Flow problem
+    source_node = 2
+    sink_node = 6
+    
+    # Run the Cycle-Cancelling algorithm
+    print(f"\n--- Running Cycle-Cancelling Algorithm from Node {source_node} to Node {sink_node} ---")
+    
+    try:
+        flow_dict, min_cost = cycle_cancelling(
+            G4, 
+            source_node, 
+            sink_node, 
+            weight="weight", 
+            capacity="capacity"
+        )
+        
+        print("\n--- Results ---")
+        print(f"Calculated Minimum Cost: {min_cost}")
+        print("Final Flow Dictionary (u -> v: flow_amount):")
+        
+        total_flow = 0
+        for u, nbrs in flow_dict.items():
+            for v, f in nbrs.items():
+                if f > 0:
+                    print(f"  {u} -> {v}: {f}")
+                    if u == source_node:
+                        total_flow += f
+        
+        print(f"\nTotal Max Flow (Flow out of source {source_node}): {total_flow}")
+    
+    except Exception as e:
+        print(f"\n--- Execution Error ---")
+        print(f"The Cycle-Cancelling algorithm failed, likely due to a dependency on a non-standard NetworkX function (nx.find_negative_cycle) or an issue in flow augmentation logic.")
+        print(f"Error details: {e}")
+
 
 
 if __name__ == "__main__":
