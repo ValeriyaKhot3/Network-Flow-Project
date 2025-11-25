@@ -527,7 +527,7 @@ def main():
         print(f"The Cycle-Cancelling algorithm failed, likely due to a dependency on a non-standard NetworkX function (nx.find_negative_cycle) or an issue in flow augmentation logic.")
         print(f"Error details: {e}")
 
-    """
+    
     G2 = build_and_draw_graph2()
 
     # Define source (s) and sink (t) for the Min-Cost Max-Flow problem
@@ -605,7 +605,7 @@ def main():
     G4 = build_and_draw_graph4()
 
     # Define source (s) and sink (t) for the Min-Cost Max-Flow problem
-    source_node = 2
+    source_node = 0
     sink_node = 6
     
     # Run the Cycle-Cancelling algorithm
@@ -638,7 +638,7 @@ def main():
         print(f"\n--- Execution Error ---")
         print(f"The Cycle-Cancelling algorithm failed, likely due to a dependency on a non-standard NetworkX function (nx.find_negative_cycle) or an issue in flow augmentation logic.")
         print(f"Error details: {e}")
-        """
+        
 
 
 
