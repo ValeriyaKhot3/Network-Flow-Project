@@ -1,6 +1,5 @@
 import networkx as nx
 from copy import deepcopy
-import matplotlib.pyplot as plt
 
 def print_residual_graph_state(R, cycle=None):
     """
@@ -105,19 +104,31 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
     for u, v, data in G.edges(data=True):
         G_cap.add_edge(u, v, capacity=data[capacity])
 
-    flow_dict = nx.maximum_flow(G_cap, s, t, flow_func=None)[1]  # flow_dict is a nested dict
+    max_flow_return = nx.maximum_flow(G_cap, s, t, flow_func=None)  # flow_dict is a nested dict
+    flow_dict = max_flow_return[1]
+
+    for u, v in G_cap.edges():
+        # If node u has no outgoing flow dict, create one
+        if u not in flow_dict:
+            flow_dict[u] = {}
+
+        # If edge (u, v) not assigned by max-flow, its flow is 0
+        if v not in flow_dict[u]:
+            flow_dict[u][v] = 0
+
+    
 
     # --------------------------------------------------------
     # 3. BUILD INITIAL RESIDUAL GRAPH
     # --------------------------------------------------------
-
+    
     def build_residual(G, flow):
         R = nx.DiGraph()
         for u, v, data in G.edges(data=True):
             cap = data[capacity]
             w = data[weight]
 
-            f = flow[u][v] if v in flow[u] else 0
+            f = flow.get(u, {}).get(v, 0)
             residual_fwd = cap - f
             residual_bwd = f
 
@@ -128,8 +139,11 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
             # backward edge (v -> u)
             if residual_bwd > 0:
                 R.add_edge(v, u, capacity=residual_bwd, weight=-w)
-        
+        print("*************************\nThe residual: ")
+        for u, v, data in G.edges(data=True):
+            print(f"{u} -> {v} : cap = {data[capacity]} , w = {data[weight]}")
 
+        print("*************************")
 
         return R
 
@@ -145,10 +159,12 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
 
             if G.has_edge(u, v):  
                 # forward edge (u→v)
+                flow.setdefault(u, {}).setdefault(v, 0)
                 flow[u][v] += bottleneck
 
             elif G.has_edge(v, u):  
                 # backward edge (v→u)
+                flow.setdefault(v, {}).setdefault(u, 0)
                 flow[v][u] -= bottleneck  # reduce forward flow
 
             else:
@@ -178,13 +194,15 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
             try:
                 # Try to find a negative cycle inside this SCC
                 cycle = negative_cycle_func(subR, start, weight="weight")
+
+                print_residual_graph_state(R, cycle)
             except nx.NetworkXError:
                 # No negative cycle reachable from this start node in this SCC
                 continue
 
             # If we reach here, we found a negative cycle in this SCC.
             # Nodes/edges are the same as in R, so we use R for capacities.
-            print_residual_graph_state(R, cycle)
+            #print_residual_graph_state(R, cycle)
 
             # ---- your bottleneck & augment logic, now "per SCC" ----
             bottleneck = float("inf")
@@ -202,11 +220,11 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
 
             cycle_found = True
             # Important: break here and rebuild residual in the next outer iteration
-            #break
+            break
 
         if not cycle_found:
             # No negative cycle in any SCC ⇒ algorithm terminates
-            print_residual_graph_state(R, None)
+            #print_residual_graph_state(R, None)
             break
 
 
@@ -223,449 +241,3 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
     return flow_dict, min_cost
 
 
-
-def build_and_draw_graph1():
-    """
-    Initializes a directed graph, adds edges with capacity and weight attributes,
-    and visualizes the graph using fixed positions for layout.
-    """
-    # 1. Initialize a directed graph
-    G = nx.DiGraph()
-
-    # 2. Define the edges with (capacity, weight) attributes
-    # Edges are defined as (source, target, {'capacity': c, 'weight': w})
-    edges_with_attributes = [
-        (0, 1, {'capacity': 10, 'weight': 1}),
-        (1, 3, {'capacity': 5, 'weight': 1}),
-        (1, 2, {'capacity': 10, 'weight': 1}),
-        (3, 6, {'capacity': 10, 'weight': 1}),
-        (3, 4, {'capacity': 5, 'weight': 3}),
-        (6, 4, {'capacity': 10, 'weight': 1}),
-        (2, 6, {'capacity': 10, 'weight': 1}),
-        (2, 4, {'capacity': 7, 'weight': 4}),
-        (4, 5, {'capacity': 15, 'weight': 1}),
-    ]
-
-    # 3. Add all edges and their attributes to the graph
-    G.add_edges_from(edges_with_attributes)
-
-    # 4. Define node positions to match the visual layout in the image
-    pos = {
-        0: (-3.0, 0.0),
-        1: (-1.5, 0.0),
-        2: (0.0, -1.5),
-        3: (0.0, 1.5),
-        4: (1.5, 0.0),
-        5: (3.0, 0.0),
-        6: (0.0, 0.0), # Central node
-    }
-
-    # 5. Extract edge labels for drawing
-    # The label will be formatted as "(capacity, weight)"
-    edge_labels = {
-        (u, v): f"({d['capacity']},{d['weight']})"
-        for u, v, d in G.edges(data=True)
-    }
-
-    # 6. Visualization settings
-    plt.figure(figsize=(10, 6))
-
-    # Draw the nodes
-    nx.draw_networkx_nodes(G, pos, node_size=1000, node_color="#89CFF0", edgecolors="black", linewidths=1.5)
-
-    # Draw the edges
-    nx.draw_networkx_edges(G, pos, arrowsize=20, edge_color="black", width=2)
-
-    # Draw node labels (the node numbers)
-    nx.draw_networkx_labels(G, pos, font_size=12, font_weight="bold")
-
-    # Draw edge labels (the capacity and weight)
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='black', label_pos=0.5, font_size=10)
-
-    plt.title("Directed Graph with Capacity and Weight Attributes (NetworkX)")
-    plt.axis('off') # Hide the axes
-    plt.show()
-
-    # Optional: Print graph information to verify
-    print("Nodes in the graph:", G.nodes)
-    print("Edges in the graph (u, v, data):")
-    for u, v, data in G.edges(data=True):
-        print(f"  {u} -> {v}: Capacity={data['capacity']}, Weight={data['weight']}")
-    return G
-
-def build_and_draw_graph2():
-    """
-    Initializes the new 4-node directed graph, adds edges with capacity and weight attributes,
-    and visualizes the graph using fixed positions for layout.
-    
-    Returns:
-        nx.DiGraph: The constructed graph G.
-    """
-    # 1. Initialize a directed graph
-    G = nx.DiGraph()
-
-    # 2. Define the edges with (capacity, weight) attributes from the new image
-    # Edges are defined as (source, target, {'capacity': c, 'weight': w})
-    edges_with_attributes = [
-        (0, 1, {'capacity': 2, 'weight': 1}),
-        (0, 2, {'capacity': 4, 'weight': 1}),
-        (1, 2, {'capacity': 3, 'weight': 1}),
-        (1, 3, {'capacity': 1, 'weight': 4}),
-        (2, 3, {'capacity': 6, 'weight': 1}),
-    ]
-
-    # 3. Add all edges and their attributes to the graph
-    G.add_edges_from(edges_with_attributes)
-
-    # 4. Define node positions to match the visual layout in the image
-    pos = {
-        0: (-2.0, 0.0), # Left
-        1: (0.0, 1.0),  # Top middle
-        2: (0.0, -1.0), # Bottom middle
-        3: (2.0, 0.0),  # Right
-    }
-
-    # 5. Extract edge labels for drawing
-    # The label will be formatted as "(capacity, weight)"
-    edge_labels = {
-        (u, v): f"({d['capacity']},{d['weight']})"
-        for u, v, d in G.edges(data=True)
-    }
-
-    # 6. Visualization settings
-    plt.figure(figsize=(8, 5))
-
-    # Draw the nodes
-    nx.draw_networkx_nodes(G, pos, node_size=1000, node_color="#89CFF0", edgecolors="black", linewidths=1.5)
-
-    # Draw the edges
-    nx.draw_networkx_edges(G, pos, arrowsize=20, edge_color="black", width=2)
-
-    # Draw node labels (the node numbers)
-    nx.draw_networkx_labels(G, pos, font_size=12, font_weight="bold")
-
-    # Draw edge labels (the capacity and weight)
-    # label_pos=0.3 is used for edge 1->2 to avoid overlap with node 6
-    edge_label_pos = {p: 0.5 for p in pos}
-    edge_label_pos[(1, 2)] = 0.3 # Move label for 1->2 closer to source 1
-    
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='black', label_pos=0.5, font_size=10)
-
-    plt.title("4-Node Directed Graph for Min-Cost Flow")
-    plt.axis('off') # Hide the axes
-    plt.show()
-
-    # Optional: Print graph information to verify
-    print("Nodes in the graph:", G.nodes)
-    print("Edges in the graph (u, v, data):")
-    for u, v, data in G.edges(data=True):
-        print(f"  {u} -> {v}: Capacity={data['capacity']}, Weight={data['weight']}")
-        
-    return G
-# residual graph is not connected- the nx func canot work properly !!!
-def build_and_draw_graph3():
-    """
-    Initializes the new node directed graph, adds edges with capacity and weight attributes,
-    and visualizes the graph using fixed positions for layout.
-    
-    Returns:
-        nx.DiGraph: The constructed graph G.
-    """
-    # 1. Initialize a directed graph
-    G = nx.DiGraph()
-
-    pos = {
-        0: (0, 200),
-        1: (150, 300),
-        2: (150, 200),
-        3: (150, 100),
-        4: (300, 250),
-        5: (300, 150),
-        6: (450, 200),
-    }
-
-    # 2. Define Edges with Attributes
-    # Format: (source, target, {'capacity': c, 'weight': w})
-    # The attributes are derived from the 'e <source_id> <target_id> <edge_id> <capacity> <weight>' lines.
-    edges_with_attributes = [
-        # (u, v, capacity, weight)
-        (0, 1, {'capacity': 8, 'weight': 2}),
-        (0, 2, {'capacity': 6, 'weight': 1}),
-        (1, 3, {'capacity': 3, 'weight': 5}),
-        (2, 1, {'capacity': 2, 'weight': 1}),
-        (2, 4, {'capacity': 5, 'weight': 2}),
-        (3, 5, {'capacity': 4, 'weight': 1}),
-        (3, 4, {'capacity': 1, 'weight': 3}),
-        (4, 6, {'capacity': 7, 'weight': 1}),
-        (5, 4, {'capacity': 2, 'weight': 1}),
-        (5, 6, {'capacity': 5, 'weight': 3}),
-        (2, 5, {'capacity': 4, 'weight': 1}),
-    ]
-    
-    # 3. Add all edges and their attributes to the graph
-    G.add_edges_from(edges_with_attributes)
-
-    # 5. Extract edge labels for drawing
-    # The label will be formatted as "(capacity, weight)"
-    edge_labels = {
-        (u, v): f"({d['capacity']},{d['weight']})"
-        for u, v, d in G.edges(data=True)
-    }
-
-    # 6. Visualization settings
-    plt.figure(figsize=(8, 5))
-
-    # Draw the nodes
-    nx.draw_networkx_nodes(G, pos, node_size=1000, node_color="#89CFF0", edgecolors="black", linewidths=1.5)
-
-    # Draw the edges
-    nx.draw_networkx_edges(G, pos, arrowsize=20, edge_color="black", width=2)
-
-    # Draw node labels (the node numbers)
-    nx.draw_networkx_labels(G, pos, font_size=12, font_weight="bold")
-
-    # Draw edge labels (the capacity and weight)
-    # label_pos=0.3 is used for edge 1->2 to avoid overlap with node 6
-    edge_label_pos = {p: 0.5 for p in pos}
-    edge_label_pos[(1, 2)] = 0.3 # Move label for 1->2 closer to source 1
-    
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='black', label_pos=0.5, font_size=10)
-
-    plt.title("4-Node Directed Graph for Min-Cost Flow")
-    plt.axis('off') # Hide the axes
-    plt.show()
-
-    # Optional: Print graph information to verify
-    print("Nodes in the graph:", G.nodes)
-    print("Edges in the graph (u, v, data):")
-    for u, v, data in G.edges(data=True):
-        print(f"  {u} -> {v}: Capacity={data['capacity']}, Weight={data['weight']}")
-        
-    return G
-#same as 3
-def build_and_draw_graph4():
-    """
-    Initializes the graph based on the user's input, with one modification 
-    to introduce a negative cycle (2 -> 1 -> 2) with cost -4.
-    
-    Returns:
-        nx.DiGraph: The constructed graph G.
-    """
-    G = nx.DiGraph()
-
-    # Node positions based on user input (n <x> <y> <node_id>)
-    pos = {
-        0: (0, 200),
-        1: (150, 300),
-        2: (150, 200),
-        3: (150, 100),
-        4: (300, 250),
-        5: (300, 150),
-        6: (450, 200),
-    }
-
-    # Edges based on user input (e <source> <target> <edge_id> <capacity> <weight>)
-    edges_with_attributes = [
-        # Original edges from user request
-        (0, 1, {'capacity': 8, 'weight': 2}),
-        (0, 2, {'capacity': 6, 'weight': 1}),
-        # (1, 3, {'capacity': 3, 'weight': 5}), # Use this original edge
-        (2, 1, {'capacity': 2, 'weight': 1}),
-        (2, 4, {'capacity': 5, 'weight': 2}),
-        (3, 5, {'capacity': 4, 'weight': 1}),
-        (3, 4, {'capacity': 1, 'weight': 3}),
-        (4, 6, {'capacity': 7, 'weight': 1}),
-        (5, 4, {'capacity': 2, 'weight': 1}),
-        (5, 6, {'capacity': 5, 'weight': 3}),
-        (2, 5, {'capacity': 4, 'weight': 1}),
-        (4, 1, {'capacity': 1, 'weight': 1}),
-    ]
-    
-    G.add_edges_from(edges_with_attributes)
-
-    # 5. Extract edge labels for drawing
-    edge_labels = {
-        (u, v): f"({d['capacity']},{d['weight']})"
-        for u, v, d in G.edges(data=True)
-    }
-
-    # 6. Visualization settings
-    plt.figure(figsize=(8, 6))
-
-    nx.draw_networkx_nodes(G, pos, node_size=1000, node_color="#FFD700", edgecolors="black", linewidths=1.5)
-    nx.draw_networkx_edges(G, pos, arrowsize=20, edge_color="black", width=2)
-    nx.draw_networkx_labels(G, pos, font_size=12, font_weight="bold")
-    
-    nx.draw_networkx_edge_labels(
-        G, pos, 
-        edge_labels=edge_labels, 
-        font_color='black', 
-        label_pos=0.5, 
-        font_size=10
-    )
-
-    plt.title("Directed Graph 4 (Min-Cost Test with Negative Cycle: 2→1→2)")
-    plt.axis('off')
-    plt.show()
-        
-    return G
-
-
-def main():
-    """
-    Main entry point for the script.
-    """
-    
-    G1 = build_and_draw_graph1()
-    # Define source (s) and sink (t) for the Min-Cost Max-Flow problem
-    source_node = 0
-    sink_node = 5
-    
-    # Run the Cycle-Cancelling algorithm
-    print(f"\n--- Running Cycle-Cancelling Algorithm from Node {source_node} to Node {sink_node} ---")
-    
-    try:
-        flow_dict, min_cost = cycle_cancelling(
-            G1, 
-            source_node, 
-            sink_node, 
-            weight="weight", 
-            capacity="capacity"
-        )
-        
-        print("\n--- Results ---")
-        print(f"Calculated Minimum Cost: {min_cost}")
-        print("Final Flow Dictionary (u -> v: flow_amount):")
-        
-        total_flow = 0
-        for u, nbrs in flow_dict.items():
-            for v, f in nbrs.items():
-                if f > 0:
-                    print(f"  {u} -> {v}: {f}")
-                    if u == source_node:
-                        total_flow += f
-        
-        print(f"\nTotal Max Flow (Flow out of source {source_node}): {total_flow}")
-    
-    except Exception as e:
-        print(f"\n--- Execution Error ---")
-        print(f"The Cycle-Cancelling algorithm failed, likely due to a dependency on a non-standard NetworkX function (nx.find_negative_cycle) or an issue in flow augmentation logic.")
-        print(f"Error details: {e}")
-
-    
-    G2 = build_and_draw_graph2()
-
-    # Define source (s) and sink (t) for the Min-Cost Max-Flow problem
-    source_node = 0
-    sink_node = 3
-    
-    # Run the Cycle-Cancelling algorithm
-    print(f"\n--- Running Cycle-Cancelling Algorithm from Node {source_node} to Node {sink_node} ---")
-    
-    try:
-        flow_dict, min_cost = cycle_cancelling(
-            G2, 
-            source_node, 
-            sink_node, 
-            weight="weight", 
-            capacity="capacity"
-        )
-        
-        print("\n--- Results ---")
-        print(f"Calculated Minimum Cost: {min_cost}")
-        print("Final Flow Dictionary (u -> v: flow_amount):")
-        
-        total_flow = 0
-        for u, nbrs in flow_dict.items():
-            for v, f in nbrs.items():
-                if f > 0:
-                    print(f"  {u} -> {v}: {f}")
-                    if u == source_node:
-                        total_flow += f
-        
-        print(f"\nTotal Max Flow (Flow out of source {source_node}): {total_flow}")
-    
-    except Exception as e:
-        print(f"\n--- Execution Error ---")
-        print(f"The Cycle-Cancelling algorithm failed, likely due to a dependency on a non-standard NetworkX function (nx.find_negative_cycle) or an issue in flow augmentation logic.")
-        print(f"Error details: {e}")
-
-
-    G3 = build_and_draw_graph3()
-    # Define source (s) and sink (t) for the Min-Cost Max-Flow problem
-    source_node = 0
-    sink_node = 6
-    
-    # Run the Cycle-Cancelling algorithm
-    print(f"\n--- Running Cycle-Cancelling Algorithm from Node {source_node} to Node {sink_node} ---")
-    
-    try:
-        flow_dict, min_cost = cycle_cancelling(
-            G3, 
-            source_node, 
-            sink_node, 
-            weight="weight", 
-            capacity="capacity"
-        )
-        
-        print("\n--- Results ---")
-        print(f"Calculated Minimum Cost: {min_cost}")
-        print("Final Flow Dictionary (u -> v: flow_amount):")
-        
-        total_flow = 0
-        for u, nbrs in flow_dict.items():
-            for v, f in nbrs.items():
-                if f > 0:
-                    print(f"  {u} -> {v}: {f}")
-                    if u == source_node:
-                        total_flow += f
-        
-        print(f"\nTotal Max Flow (Flow out of source {source_node}): {total_flow}")
-    
-    except Exception as e:
-        print(f"\n--- Execution Error ---")
-        print(f"The Cycle-Cancelling algorithm failed, likely due to a dependency on a non-standard NetworkX function (nx.find_negative_cycle) or an issue in flow augmentation logic.")
-        print(f"Error details: {e}")
-    
-    G4 = build_and_draw_graph4()
-
-    # Define source (s) and sink (t) for the Min-Cost Max-Flow problem
-    source_node = 0
-    sink_node = 6
-    
-    # Run the Cycle-Cancelling algorithm
-    print(f"\n--- Running Cycle-Cancelling Algorithm from Node {source_node} to Node {sink_node} ---")
-    
-    try:
-        flow_dict, min_cost = cycle_cancelling(
-            G4, 
-            source_node, 
-            sink_node, 
-            weight="weight", 
-            capacity="capacity"
-        )
-        
-        print("\n--- Results ---")
-        print(f"Calculated Minimum Cost: {min_cost}")
-        print("Final Flow Dictionary (u -> v: flow_amount):")
-        
-        total_flow = 0
-        for u, nbrs in flow_dict.items():
-            for v, f in nbrs.items():
-                if f > 0:
-                    print(f"  {u} -> {v}: {f}")
-                    if u == source_node:
-                        total_flow += f
-        
-        print(f"\nTotal Max Flow (Flow out of source {source_node}): {total_flow}")
-    
-    except Exception as e:
-        print(f"\n--- Execution Error ---")
-        print(f"The Cycle-Cancelling algorithm failed, likely due to a dependency on a non-standard NetworkX function (nx.find_negative_cycle) or an issue in flow augmentation logic.")
-        print(f"Error details: {e}")
-        
-
-
-
-if __name__ == "__main__":
-    main()
