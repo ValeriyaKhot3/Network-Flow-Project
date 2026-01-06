@@ -1,6 +1,13 @@
 import networkx as nx
 from copy import deepcopy
 
+def print_graph_with_flows(G, flow_dict, capacity_attr="capacity"):
+    print("\n=== Graph with Flows ===")
+    for u, v, data in G.edges(data=True):
+        flow = flow_dict.get(u, {}).get(v, 0)
+        cap = data.get(capacity_attr, "?")
+        print(f"{u} -> {v} | flow = {flow} / capacity = {cap}")
+
 def print_residual_graph_state(R, cycle=None):
     """
     Prints the state of the residual graph to the console for a given iteration.
@@ -107,6 +114,8 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
     max_flow_return = nx.maximum_flow(G_cap, s, t, flow_func=None)  # flow_dict is a nested dict
     flow_dict = max_flow_return[1]
 
+    
+
     for u, v in G_cap.edges():
         # If node u has no outgoing flow dict, create one
         if u not in flow_dict:
@@ -116,6 +125,7 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
         if v not in flow_dict[u]:
             flow_dict[u][v] = 0
 
+    print_graph_with_flows(G_cap, flow_dict)
     
 
     # --------------------------------------------------------
@@ -139,11 +149,6 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
             # backward edge (v -> u)
             if residual_bwd > 0:
                 R.add_edge(v, u, capacity=residual_bwd, weight=-w)
-        print("*************************\nThe residual: ")
-        for u, v, data in G.edges(data=True):
-            print(f"{u} -> {v} : cap = {data[capacity]} , w = {data[weight]}")
-
-        print("*************************")
 
         return R
 
@@ -175,7 +180,12 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
     # --------------------------------------------------------
 
     while True:
+
+        print_graph_with_flows(G, flow_dict)
+
         R = build_residual(G, flow_dict)
+
+        print_residual_graph_state(R, None)
 
         cycle_found = False  # will flip to True if we find & cancel a negative cycle
 
@@ -212,11 +222,13 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
                 cap = R[u][v]["capacity"]
                 if cap < bottleneck:
                     bottleneck = cap
-
+            print(f"the Bottleneck is : {bottleneck}")
             if bottleneck <= 0:
                 raise RuntimeError("Residual bottleneck is non-positive (should not happen).")
 
             augment_cycle(flow_dict, cycle, bottleneck)
+
+
 
             cycle_found = True
             # Important: break here and rebuild residual in the next outer iteration

@@ -12,7 +12,7 @@ from build_graph_funcs import (
 )
 
 #from cycle_cancelling_conectivity import cycle_cancelling
-from cycle_cancelling_conectivity import cycle_cancelling
+from MultiR import cycle_cancelling
 
 from min_cost_test import(
     print_flow,
