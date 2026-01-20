@@ -12,7 +12,10 @@ from build_graph_funcs import (
 )
 
 #from cycle_cancelling_conectivity import cycle_cancelling
-from MultiR import cycle_cancelling
+#from MultiR import cycle_cancelling
+#from find_minimum_mean_negative_cycle import cycle_cancelling
+from cycle_cancelling_MM import cycle_cancelling
+#from superNodeR import cycle_cancelling
 
 from min_cost_test import(
     print_flow,
@@ -75,9 +78,10 @@ def run_experiment_for_graph(build_fn, name, s, t):
     """
     # Build (and draw) the base graph
     G_base = build_fn()
+    """
     for u, v, data in G_base.edges(data=True):
         print(f"{u} -> {v} | cap={data['capacity']} weight={data['weight']}")
-
+    """
 
     # 1. Max flow (on a copy, just in case)
     f_max, _ = run_and_print_max_flow(deepcopy(G_base), name, s, t)
@@ -174,28 +178,8 @@ def build_random_directed_graph(
     if not allow_self_loops:
         G.remove_edges_from(nx.selfloop_edges(G))
 
-    # 2) Forbid anti-parallel edges: if u->v exists and v->u exists, delete one direction
-    # We choose which to delete in a reproducible way using rng.'''
 
-    for u, v, data in G.edges(data=True):
-        print(f"{u} -> {v} ")
-
-    for u, v in list(G.edges()):
-        if u == v:
-            continue
-        if G.has_edge(v, u) and G.has_edge(u, v):
-            # remove exactly one of the two
-            if rng.random() < 0.5:
-                G.remove_edge(u, v)
-            else:
-                G.remove_edge(v, u)
-
-
-    for u, v, data in G.edges(data=True):
-        print(f"{u} -> {v} ")
-
-
-    # 3) Ensure at least one path from source to target (optional but useful for flow tests)
+    # 2) Ensure at least one path from source to target (optional but useful for flow tests)
     if ensure_path:
         if not nx.has_path(G, source, target):
             # Add a simple chain: source -> ... -> target using random intermediate nodes
@@ -206,66 +190,18 @@ def build_random_directed_graph(
             chain = [source] + nodes[: max(0, min(len(nodes), 3))] + [target]  # short chain
             for u, v in zip(chain, chain[1:]):
                 G.add_edge(u, v)
-        
+    """   
     for u, v, data in G.edges(data=True):
         print(f"{u} -> {v} ")
+    """
 
 
-    # 3) Assign random capacity/weight to EVERY edge
+    # 4) Assign random capacity/weight to EVERY edge
     for u, v in G.edges():
         G[u][v]["capacity"] = rng.randint(c_lo, c_hi)
         G[u][v]["weight"] = rng.randint(w_lo, w_hi)
 
     return G
-
-
-
-
-"""
-
-def run_cycle_cancelling_for_graph(build_fn, graph_name, source_node, sink_node):
-  
-    Build a graph, run the Cycle-Cancelling algorithm on it,
-    and print results in a uniform way.
-    
-    # Build (and draw) the graph
-    G = build_fn()
-
-    print(f"\n=== {graph_name}: Running Cycle-Cancelling Algorithm from Node {source_node} to Node {sink_node} ===")
-
-    try:
-        flow_dict, min_cost = cycle_cancelling(
-            G,
-            source_node,
-            sink_node,
-            weight="weight",
-            capacity="capacity",
-        )
-
-        print("\n--- Results ---")
-        print(f"Calculated Minimum Cost: {min_cost}")
-        print("Final Flow Dictionary (u -> v: flow_amount):")
-
-        total_flow = 0
-        for u, nbrs in flow_dict.items():
-            for v, f in nbrs.items():
-                if f > 0:
-                    print(f"  {u} -> {v}: flow = {f}")
-                    if u == source_node:
-                        total_flow += f
-
-        print(f"\nTotal Max Flow (Flow out of source {source_node}): {total_flow}")
-
-    except Exception as e:
-        print("\n--- Execution Error ---")
-        print(
-            "The Cycle-Cancelling algorithm failed, likely due to a dependency "
-            "on a non-standard NetworkX function (e.g., nx.find_negative_cycle) "
-            "or an issue in flow augmentation logic."
-        )
-        print(f"Error details: {e}")
-"""
-
 
 def main():
     """
@@ -279,15 +215,15 @@ def main():
 
     graph_configs = [
         ("Graph 100", lambda: build_random_directed_graph(
-                                num_nodes=5,
-                                density=0.3,
+                                num_nodes=100,
+                                density=0.8,
                                 capacity_range=(1, 25),
-                                weight_range=(1, 18),
+                                weight_range=(1, 8),
                                 ensure_path=True,
                                 source=0,
-                                target=4,
-                                seed=43,
-                            ),0,4)
+                                target=99,
+                                seed=16,
+                            ),0,99)
     ]
 
     for name, build_fn, s, t in graph_configs:

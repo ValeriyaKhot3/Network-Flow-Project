@@ -1,5 +1,115 @@
 import networkx as nx
 from copy import deepcopy
+import math
+
+def find_minimum_mean_negative_cycle(G, source=None, weight="weight"):
+    """
+    Finds the minimum mean negative cycle using Karp's Algorithm.
+    
+    1. Preprocesses MultiDiGraphs to simple DiGraphs (keeping min weight).
+    2. Uses Dynamic Programming to find shortest paths of exact lengths.
+    3. Applies Karp's formula to find the minimum mean value.
+    4. Traces back through DP layers to recover the exact cycle nodes.
+    """
+    
+    # STEP 1: PREPROCESS -------------------------------------------------------
+    # Cycle-cancelling residual graphs are MultiDiGraphs
+    # Karp's DP requires a simple DiGraph where we use the cheapest edge
+    print("karp bitch")
+    if G.is_multigraph():
+        S = nx.DiGraph()
+        for u, v, data in G.edges(data=True):
+            w = data.get(weight, 0)
+            if S.has_edge(u, v):
+                # Save only one edge per direction between two nodes
+                # Choose the cheapest edge
+                if w < S[u][v][weight]:
+                    S[u][v][weight] = w
+            else:
+                S.add_edge(u, v, **{weight: w})
+        G = S
+
+    # Initialization for dynamic programming
+    nodes = list(G.nodes())
+    n = len(nodes)
+    if n == 0:
+        raise nx.NetworkXError("Empty graph")
+
+    idx = {v: i for i, v in enumerate(nodes)}   # Index mapping: node → int
+    
+    # dp[k][v] = min cost of walk of length k ending at v
+    dp = [[math.inf] * n for _ in range(n + 1)]
+    # parent[k][v] = the node u that preceded v in a path of length k
+    # Compute walks of length up to n: any cycle must repeat within n nodes
+    parent = [[None] * n for _ in range(n + 1)]
+
+    # Virtual source: initialize all nodes at distance 0
+    # Allows detecting cycles anywhere in the graph
+    for v in range(n):
+        dp[0][v] = 0
+
+    # STEP 2: DYNAMIC PROGRAMMING ----------------------------------------------
+    # Calculate shortest paths for every length k from 1 to n
+    for k in range(1, n + 1):
+        # Iterate over all directed edges (u → v)
+        for u, v, data in G.edges(data=True):
+            w = data[weight]
+            # Convert node labels to integer indices for DP table access
+            ui, vi = idx[u], idx[v]
+            # If extending the cheapest (k−1)-edge walk ending at u via edge u→v
+            # yields a cheaper k-edge walk ending at v, update the DP value
+            if dp[k - 1][ui] + w < dp[k][vi]:
+                dp[k][vi] = dp[k - 1][ui] + w
+                parent[k][vi] = u
+
+    # STEP 3: KARP'S MIN-MAX FORMULA -------------------------------------------
+    mu = math.inf       # Initialize the minimum mean cycle cost to infinity
+    v_star = None       # Will store a node that lies on the minimum mean cycle
+
+    # Iterate over every node to consider cycles ending at that node
+    for v in range(n):
+        if dp[n][v] == math.inf:
+            # Skip nodes that are unreachable in a walk of length n
+            continue
+        
+        # max_k [(dp[n][v] - dp[k][v]) / (n - k)]
+        max_avg = -math.inf
+        for k in range(n):
+            if dp[k][v] != math.inf:
+                avg = (dp[n][v] - dp[k][v]) / (n - k)
+                if avg > max_avg:
+                    max_avg = avg
+
+        if max_avg < mu:
+            mu = max_avg
+            v_star = v
+
+    # STEP 4: TERMINATION CHECK ------------------------------------------------
+    # mu < 0 indicates a negative mean cycle exists
+    # Use small epsilon to handle floating point precision issues
+    if v_star is None or mu >= -1e-11:
+        raise nx.NetworkXError("No negative mean cycle found")
+
+    # STEP 5: ROBUST CYCLE RECONSTRUCTION --------------------------------------
+    # We trace the path back from the n-th layer to find the repeated nodes
+    curr = nodes[v_star]
+    path = []
+    for k in range(n, -1, -1):
+        path.append(curr)
+        curr = parent[k][idx[curr]]
+        if curr is None: break 
+
+    path.reverse()
+    
+    # Identify the actual cycle within the path (remove the "tail")
+    seen = {}
+    for i, node in enumerate(path):
+        if node in seen:
+            # Return cycle including the closing node for the backbone
+            return path[seen[node] : i + 1]
+        seen[node] = i
+
+    raise nx.NetworkXError("Failed to reconstruct cycle")
 
 def print_graph_with_flows(G, flow_dict, capacity_attr="capacity"):
     print("\n=== Graph with Flows ===")
@@ -23,8 +133,8 @@ def print_residual_graph_state(R, cycle=None):
             u = cycle[i]
             v = cycle[i + 1]
             # Use .get for safety, although the cycle should only contain existing edges
-            weight = R[u][v].get("weight", 0)
-            cycle_cost += weight
+            w = R[u][v].get("weight", 0)
+            cycle_cost += w
             cycle_edges.append(f"({u} -> {v})")
             
         print(f"Negative Cycle Found (Cost: {cycle_cost:.2f}): {' -> '.join(map(str, cycle[:-1]))} -> {cycle[0]}")
@@ -69,7 +179,8 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
     Returns:
         (flow_dict, min_cost)
     """
-    default_negative_cycle_func = nx.find_negative_cycle
+    default_negative_cycle_func = find_minimum_mean_negative_cycle
+    #default_negative_cycle_func = nx.find_negative_cycle
 
     # --------------------------------------------------------
     # 1. PARAMETER VALIDATION
@@ -125,7 +236,7 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
         if v not in flow_dict[u]:
             flow_dict[u][v] = 0
 
-    print_graph_with_flows(G_cap, flow_dict)
+    #print_graph_with_flows(G_cap, flow_dict)
     
 
     # --------------------------------------------------------
@@ -136,19 +247,27 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
         # We use MultiDiGraph because u->v might have a forward residual edge 
         # AND a backward residual edge from the opposite original edge v->u.
         R = nx.DiGraph()
+        print("created empty R")
         for u, v, data in G.edges(data=True):
+            print("residual for started")
             cap = data[capacity]
+            print(f"HERE THE BUG the edges data is: {data} ")
             w = data[weight]
+            print("FUCK WEIGHT")
             f = flow.get(u, {}).get(v, 0)
+            print("IS THE FLOW THE PROBLEM")
 
             # Forward residual edge: can push (cap - f) more flow at cost 'w'
             # for negative cycle, we need only the bwd edge, otherwise we work with an edge without flow
             if f < cap:
                 if R.has_edge(u, v):
+                    print("OR THE EDGE")
                     if R[u][v]["type"] == "bwd":
+                        print("MAYBE THE CONTINUE")
                         continue
-                    else:
-                        R.add_edge(u, v, weight=w, capacity=cap - f, type='fwd')
+                else:
+                    R.add_edge(u, v, weight=w, capacity=cap - f, type='fwd')
+                print("residual fwd added")
             
             # Backward residual edge: can push 'f' back at cost '-w'
             if f > 0:
@@ -156,6 +275,7 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
                     if R[v][u]["type"] == "fwd":
                         R.remove_edge(v, u)
                 R.add_edge(v, u, weight=-w, capacity=f, type='bwd')
+                print("residual bwd added")
                 
         return R
 
@@ -166,20 +286,24 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
     def augment_cycle(flow, cycle, bottleneck):
         """Increase flow along cycle edges by bottleneck."""
         for i in range(len(cycle)-1):
+            print("augmen for started")
             u = cycle[i]
             v = cycle[i+1]
 
-            if G.has_edge(u, v):  
+            if G.has_edge(u, v) and R.has_edge(u,v) and R[u][v]["type"] == "fwd":  
                 # forward edge (u→v)
                 flow.setdefault(u, {}).setdefault(v, 0)
                 flow[u][v] += bottleneck
+                print("augmen bottle added")
 
-            elif G.has_edge(v, u):  
+            elif G.has_edge(v, u) and R.has_edge(u,v) and R[u][v]["type"] == "bwd":  
                 # backward edge (v→u)
                 flow.setdefault(v, {}).setdefault(u, 0)
                 flow[v][u] -= bottleneck  # reduce forward flow
+                print("augmen bottle -")
 
             else:
+                print("thats the fucking error in augmen")
                 raise RuntimeError("Cycle edge not found in original graph.")
 
     # --------------------------------------------------------
@@ -188,16 +312,19 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
 
     while True:
 
-        print_graph_with_flows(G, flow_dict)
+        #print_graph_with_flows(G, flow_dict)
 
         R = build_residual(G, flow_dict)
 
-        print_residual_graph_state(R, None)
+        print("BUILT R")
+
+        #print_residual_graph_state(R, None)
 
         cycle_found = False  # will flip to True if we find & cancel a negative cycle
 
         # Iterate over strongly connected components of the residual graph
         for comp in nx.strongly_connected_components(R):
+            print("START SCC FOR")
             # (optional) Skip trivial SCCs that cannot contain a cycle (no self-loop)
             if len(comp) == 1:
                 u = next(iter(comp))
@@ -206,21 +333,38 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
 
             # Induced subgraph on this SCC
             subR = R.subgraph(comp).copy()
+            print("COPPIED R")
             start = next(iter(comp))
 
             try:
                 # Try to find a negative cycle inside this SCC
                 cycle = negative_cycle_func(subR, start, weight="weight")
-
+                print("SEARCHING CYCLE DONE")
+                if cycle:
+                    cycle_edges = []
+                    cycle_cost = 0
+                    for i in range(len(cycle) - 1):
+                        u = cycle[i]
+                        v = cycle[i + 1]
+                        # Use .get for safety, although the cycle should only contain existing edges
+                        w = R[u][v].get("weight", 0)
+                        cycle_cost += w
+                        cycle_edges.append(f"({u} -> {v})")
+            
+                    print(f"Negative Cycle Found (Cost: {cycle_cost:.2f}): {' -> '.join(map(str, cycle[:-1]))} -> {cycle[0]}")
+                    print(f"the cycle cost: {cycle_cost}")
+                    if cycle_cost >= 0 :
+                        continue
                 print_residual_graph_state(R, cycle)
             except nx.NetworkXError:
+                print("NO CYCLE")
                 # No negative cycle reachable from this start node in this SCC
                 continue
 
             # If we reach here, we found a negative cycle in this SCC.
             # Nodes/edges are the same as in R, so we use R for capacities.
             #print_residual_graph_state(R, cycle)
-
+            
             # ---- your bottleneck & augment logic, now "per SCC" ----
             bottleneck = float("inf")
             for i in range(len(cycle) - 1):
@@ -231,9 +375,12 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
                     bottleneck = cap
             print(f"the Bottleneck is : {bottleneck}")
             if bottleneck <= 0:
+                print("IS THE BOTTLE FUCKING NEGATIVE?!")
                 raise RuntimeError("Residual bottleneck is non-positive (should not happen).")
 
+            print("BEFORE AUGM")
             augment_cycle(flow_dict, cycle, bottleneck)
+            print("AFTER AUG")
 
 
 
@@ -242,6 +389,7 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
             break
 
         if not cycle_found:
+            print("NEED TO ENDDD*******************************************************************************************")
             # No negative cycle in any SCC ⇒ algorithm terminates
             #print_residual_graph_state(R, None)
             break
@@ -250,10 +398,12 @@ def cycle_cancelling(G, s, t, weight="weight",flow_func=None, capacity="capacity
     # --------------------------------------------------------
     # 5. COMPUTE FINAL MINIMUM COST
     # --------------------------------------------------------
-
+    print ("calculating min cost")
     min_cost = 0
     for u, nbrs in flow_dict.items():
+        print("FLOW FOR")
         for v, f in nbrs.items():
+            print("CALCULATING")
             if f > 0:  # only forward flows
                 min_cost += f * G[u][v][weight]
 
